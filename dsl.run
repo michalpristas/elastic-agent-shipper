@@ -1,0 +1,10 @@
+docker run --rm \
+  --name release-manager \
+  --mount type=bind,readonly=false,src=/Users/michal/Projects/elastic/elastic-agent-shipper/dsl,target=/vagrant/release/project-configs/dra \
+  docker.elastic.co/infra/release-manager:latest \
+    cli list  \
+      --project elastic-agent-shipper  \
+      --branch dra  \
+      --build-type artifact-set \
+      --build-name main \
+      --version dra
