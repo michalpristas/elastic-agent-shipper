@@ -1,0 +1,138 @@
+/***************************
+*
+*. THIS FILE IS MANAGED BY THE RELEASE ENG TEAM
+*
+****************************/
+
+import org.gradle.util.DistributionLocator
+import org.gradle.util.GradleVersion
+
+import static org.gradle.api.tasks.wrapper.Wrapper.DistributionType
+plugins {
+  id ('elastic.stack.configuration') version('1.0-current')
+  id ('elastic.stack') version('1.0-current') apply(false)
+}
+configuration {
+
+  // the releaseBranch is the default git branch for every project
+  releaseBranch = 'dra'
+
+  // Projects to release
+  gitProjects = [
+      [name: 'elastic-agent-shipper'],
+  ]
+
+  versionConfiguration {
+
+    // accessible in build dsl with `stackVersion`
+    // overridable with `-Pconfiguration.versionConfiguration.version=<version>`
+    version = 'dra'
+
+    // accessible in build dsl with `versionQualifier`
+    // overridable with `-Pconfiguration.versionConfiguration.qualifier=<version>`
+    // qualifier = 'beta1'
+  }
+
+  // Flag to know in which context Release Manager is running
+  runInContainer = false
+
+  // Default base URL to checkout git projects
+  defaultGitBaseURL = 'git@github.com:elastic'
+
+  // Vault URL for authentication
+  vaultURL = "http://${getIP()}:4208"
+  vaultRoleId = 'rmrole'
+
+  // S3 Endpoints URL (Optional)
+  s3EndpointURL = "http://${getIP()}:4205"
+
+  // S3 bucket region (optional). If not set, default value is us-east-1
+  s3BucketRegion = 'us-east-1'
+
+  // S3 Buckets to store artifacts
+  snapshotsBucket = 'snapshots'
+  stagingBucket = 'staging'
+  releaseBucket = 'artifacts'
+
+  // GCS Buckets project ID
+  gcsBucketProjectId = 'gcs-local-testing'
+
+  // GCS Endpoint URL (Optional)
+  gcsEndpointUrl = "http://${getIP()}:4202"
+
+  // GCS Buckets to store artifacts
+  gcsSnapshotsBucket = 'gcs-snapshots'
+  gcsStagingBucket = 'gcs-staging'
+
+  // http frontends
+  s3SnapshotHttpFrontendUrl = "https://snapshots.elastic.co"
+  s3StagingHttpFrontendUrl = "https://staging.elastic.co"
+  gcsSnapshotHttpFrontendUrl = "https://artifacts-snapshot.elastic.co"
+  gcsStagingHttpFrontendUrl = "https://artifacts-staging.elastic.co"
+
+  ossDependenciesBucket = 'oss-dependencies-dev.elastic.co'
+  nexusURL = "http://${getIP()}:4206/nexus"
+  nexusStagingProfileId = 'rm-profile'
+  gitHubOrganization = ''
+  gitTagAuthor = ''
+  gitTagEmail = ''
+  releaseManifestsElasticsearchURL = ''
+  releaseManifestsIndex = 'manifest-entrypoint'
+
+  trigger {
+    // trigger downstream jobs after a successful build
+    enable = false
+  }
+}
+
+apply plugin: 'elastic.stack'
+
+apply from: 'elastic-agent-shipper.gradle'
+
+
+wrapper {
+  distributionType = DistributionType.ALL
+
+  doLast {
+    final DistributionLocator locator = new DistributionLocator()
+    final GradleVersion version = GradleVersion.version(wrapper.gradleVersion)
+    final URI distributionUri = locator.getDistributionFor(version, wrapper.distributionType.name().toLowerCase(Locale.ENGLISH))
+    final URI sha256Uri = new URI(distributionUri.toString() + ".sha256")
+    final String sha256Sum = new String(sha256Uri.toURL().bytes)
+    wrapper.getPropertiesFile() << "distributionSha256Sum=${sha256Sum}\n"
+  }
+}
+
+/**
+ * Use for the dev/test environments in order to get access
+ * to the services deployed in containers (vault, minio, nexus...) when
+ * the environment is set up by running:
+ * <pre>
+ *    make docker-compose-up-all
+ * </pre>
+ * More details in <a href="https://github.com/elastic/release-manager/blob/master/buildSrc/README.adoc#setup-services">the developer guide</a>.
+ *
+ * For the production environment, all the URLs which use this method are overridden to
+ * have the correct values.
+ */
+private String getIP() {
+  if (System.getProperty("service.ip.address") != null) {
+    return System.getProperty("service.ip.address")
+  }
+  InetAddress result = null
+  Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces()
+  while (interfaces.hasMoreElements()) {
+    Enumeration<InetAddress> addresses = interfaces.nextElement().getInetAddresses()
+    while (addresses.hasMoreElements()) {
+      InetAddress address = addresses.nextElement()
+      if (!address.isLoopbackAddress()) {
+        if (address.isSiteLocalAddress()) {
+          return address.getHostAddress()
+        } else if (result == null) {
+          result = address
+        }
+      }
+    }
+  }
+  return (result != null ? result : InetAddress.getLocalHost()).getHostAddress()
+}

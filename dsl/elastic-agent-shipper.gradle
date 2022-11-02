@@ -1,0 +1,45 @@
+// Elastic Agent Shipper - master - https://github.com/elastic/elastic-agent-shipper/commits/main
+
+// release-manager documentation: https://ela.st/rm-guide
+generic = false
+elastic_agent_shipper {
+  gitHubRelease = false
+
+  Closure shipperArtifacts = {
+      tar dir: 'build/distributions', name: 'elastic-agent-shipper', os: ['linux'], os32bit: true
+      tar dir: 'build/distributions', name: 'elastic-agent-shipper', os: ['linux'], architecture: 'arm64'
+      tar dir: 'build/distributions', name: 'elastic-agent-shipper', os: ['darwin']
+      tar dir: 'build/distributions', name: 'elastic-agent-shipper', os: ['darwin'], architecture: 'aarch64'
+      zip dir: 'build/distributions', name: 'elastic-agent-shipper', os32bit: true
+  }
+
+  // Artifact set configuration for use from fleet-ci.
+  artifactSet('main') {
+    artifacts(shipperArtifacts)
+    artifacts {
+      csvDependencyReport dir: 'build/distributions/reports', name: 'dependencies'
+    }
+  }
+
+  localBuild('local') {
+
+    // Download the fleet server artifacts built externally by fleet-ci from GCS
+    externalArtifacts('gcs', 'elastic-agent-shipper')
+
+    buildSnapshotCommands = [
+      // move dependency report to expected location
+      "mv csvDependencyReports/elastic-agent-shipper/dependencies-${qualifiedVersion}-SNAPSHOT.csv \$DEPENDENCIES_REPORTS_DIR/\$DEPENDENCIES_REPORT",
+      // move artifacts to the expected location
+      'mkdir -p build/distributions',
+      'mv downloads/elastic-agent-shipper/* build/distributions/'
+    ]
+    buildReleaseCommands = [
+      // move dependency report to expected location
+      "mv csvDependencyReports/elastic-agent-shipper/dependencies-${qualifiedVersion}.csv \$DEPENDENCIES_REPORTS_DIR/\$DEPENDENCIES_REPORT",
+      // move artifacts to the expected location
+      'mkdir -p build/distributions',
+      'mv downloads/elastic-agent-shipper/* build/distributions/'
+    ]
+    artifacts(shipperArtifacts)
+  }
+}
